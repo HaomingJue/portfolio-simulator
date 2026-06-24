@@ -34,21 +34,10 @@ No API keys needed — Yahoo data is fetched server-side via Route Handlers
 
 ## Deploy
 
-### Option A — Vercel Git integration (simplest)
-Import the repo at [vercel.com](https://vercel.com) → **Add New → Project**. Vercel
-auto-detects Next.js; no build settings or env vars are needed. Every push then
-deploys automatically (production on `main`, previews on PRs).
+Deployments are handled by **Vercel's Git integration** — import the repo once at
+[vercel.com](https://vercel.com) → **Add New → Project** (Next.js is auto-detected,
+no env vars needed). After that, every push to `main` deploys to production and
+every PR gets a preview URL automatically; there's nothing to run by hand.
 
-### Option B — the included GitHub Actions pipeline
-`.github/workflows/deploy.yml` runs typecheck + lint + build on every push/PR and,
-on `main`, deploys to Vercel. It **skips the deploy with a warning** until you add
-these repository **secrets** (Settings → Secrets and variables → Actions):
-
-| Secret | Where to get it |
-|---|---|
-| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens → Create |
-| `VERCEL_ORG_ID` | run `vercel link` locally, then read `.vercel/project.json` |
-| `VERCEL_PROJECT_ID` | same `.vercel/project.json` |
-
-> Use **either** Option A **or** B — running both will double-deploy. If you use the
-> Actions pipeline, disable Vercel's automatic Git deploys for the project.
+CI quality checks (typecheck, lint, build) run separately in GitHub Actions
+(`.github/workflows/ci.yml`).
