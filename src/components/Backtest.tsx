@@ -20,6 +20,7 @@ import {
   type Rebalance,
 } from "@/lib/backtest";
 import { AUTO_COLORS, money, pct } from "@/lib/format";
+import { chartTheme, usePrefersDark } from "@/lib/useTheme";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -75,6 +76,7 @@ export function Backtest({
   weights: Record<string, number>;
   name: string;
 }) {
+  const ct = chartTheme(usePrefersDark());
   const [start, setStart] = useState("2010-01-01");
   const [end, setEnd] = useState(todayISO());
   const [capital, setCapital] = useState(10000);
@@ -126,7 +128,7 @@ export function Backtest({
         spyValues = spySim.values;
         series.push({
           name: "S&P 500 (SPY)",
-          color: "#757575",
+          color: "#9e9e9e",
           metrics: computeMetrics(spySim, "S&P 500 (SPY)", capital),
           values: spySim.values,
         });
@@ -176,20 +178,27 @@ export function Backtest({
   }, [result]);
 
   const inputCls =
-    "rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
+    "rounded border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-blue-500 focus:outline-none";
+  const tooltipStyle = {
+    background: ct.tooltipBg,
+    border: `1px solid ${ct.tooltipBorder}`,
+    borderRadius: 6,
+    color: ct.fg,
+    fontSize: 12,
+  };
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <label className="flex flex-col gap-1 text-xs text-gray-600">
+        <label className="flex flex-col gap-1 text-xs text-muted">
           Start
           <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className={inputCls} />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-600">
+        <label className="flex flex-col gap-1 text-xs text-muted">
           End
           <input type="date" value={end} max={todayISO()} onChange={(e) => setEnd(e.target.value)} className={inputCls} />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-600">
+        <label className="flex flex-col gap-1 text-xs text-muted">
           Capital ($)
           <input
             type="number"
@@ -200,7 +209,7 @@ export function Backtest({
             className={inputCls}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-600">
+        <label className="flex flex-col gap-1 text-xs text-muted">
           Rebalance
           <select value={rebalance} onChange={(e) => setRebalance(e.target.value as Rebalance)} className={inputCls}>
             {REBALANCE_OPTIONS.map((r) => (
@@ -211,13 +220,17 @@ export function Backtest({
           </select>
         </label>
       </div>
+      <p className="-mt-2 text-xs text-faint">
+        Rebalance sells winners / tops up laggards back to your target weights on this schedule.{" "}
+        <b>none</b> = buy &amp; hold (weights drift with the market). Default is quarterly.
+      </p>
 
       <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        <label className="flex items-center gap-2 text-sm text-fg">
           <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} />
           Compare vs S&P 500 (SPY)
         </label>
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        <label className="flex items-center gap-2 text-sm text-fg">
           <input type="checkbox" checked={logScale} onChange={(e) => setLogScale(e.target.checked)} />
           Log scale
         </label>
@@ -230,12 +243,12 @@ export function Backtest({
         </button>
       </div>
 
-      {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
 
       {!stale && result && (
         <div className="space-y-5">
           {result.deferred.length > 0 && (
-            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
               ⚠️ With a start of <b>{start}</b>, some holdings weren&apos;t trading yet and are held as{" "}
               <b>cash</b> until they launch:{" "}
               {result.deferred
@@ -247,10 +260,10 @@ export function Backtest({
 
           {/* Performance & stability stats */}
           <div className="overflow-x-auto">
-            <p className="mb-1 text-sm font-medium text-gray-700">Performance &amp; stability</p>
+            <p className="mb-1 text-sm font-medium text-fg">Performance &amp; stability</p>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-xs uppercase text-gray-500">
+                <tr className="border-b border-line text-left text-xs uppercase text-muted">
                   <th className="py-1.5 pr-3 font-medium">Metric</th>
                   {result.series.map((s) => (
                     <th key={s.name} className="px-3 font-semibold" style={{ color: s.color }}>
@@ -261,13 +274,13 @@ export function Backtest({
               </thead>
               <tbody>
                 {STAT_ROWS.map((row) => (
-                  <tr key={row.label} className="border-b last:border-0">
-                    <td className="py-1 pr-3 text-gray-600" title={row.hint}>
+                  <tr key={row.label} className="border-b border-line last:border-0">
+                    <td className="py-1 pr-3 text-muted" title={row.hint}>
                       {row.label}
-                      {row.hint && <span className="ml-1 text-gray-300">ⓘ</span>}
+                      {row.hint && <span className="ml-1 text-faint">ⓘ</span>}
                     </td>
                     {result.series.map((s) => (
-                      <td key={s.name} className="px-3 tabular-nums">
+                      <td key={s.name} className="px-3 tabular-nums text-fg">
                         {row.get(s)}
                       </td>
                     ))}
@@ -279,11 +292,11 @@ export function Backtest({
 
           {/* Growth */}
           <div>
-            <p className="mb-1 text-sm font-medium text-gray-700">Growth of {money(capital)}</p>
+            <p className="mb-1 text-sm font-medium text-fg">Growth of {money(capital)}</p>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={growthData} margin={{ left: 8, right: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                <XAxis dataKey="date" fontSize={11} minTickGap={60} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+                <XAxis dataKey="date" fontSize={11} minTickGap={60} stroke={ct.axis} tick={{ fill: ct.axis }} />
                 <YAxis
                   scale={logScale ? "log" : "auto"}
                   domain={logScale ? ["auto", "auto"] : [0, "auto"]}
@@ -291,8 +304,10 @@ export function Backtest({
                   tickFormatter={(v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(0)}K` : `$${v}`)}
                   fontSize={11}
                   width={56}
+                  stroke={ct.axis}
+                  tick={{ fill: ct.axis }}
                 />
-                <Tooltip formatter={(value) => money(Number(value))} />
+                <Tooltip formatter={(value) => money(Number(value))} contentStyle={tooltipStyle} labelStyle={{ color: ct.fg }} />
                 {result.series.map((s) => (
                   <Line key={s.name} type="monotone" dataKey={s.name} stroke={s.color} dot={false} strokeWidth={1.6} />
                 ))}
@@ -302,13 +317,13 @@ export function Backtest({
 
           {/* Drawdown */}
           <div>
-            <p className="mb-1 text-sm font-medium text-gray-700">Drawdown</p>
+            <p className="mb-1 text-sm font-medium text-fg">Drawdown</p>
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={ddData} margin={{ left: 8, right: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                <XAxis dataKey="date" fontSize={11} minTickGap={60} />
-                <YAxis tickFormatter={(v: number) => `${v}%`} fontSize={11} width={44} />
-                <Tooltip formatter={(value) => `${value}%`} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+                <XAxis dataKey="date" fontSize={11} minTickGap={60} stroke={ct.axis} tick={{ fill: ct.axis }} />
+                <YAxis tickFormatter={(v: number) => `${v}%`} fontSize={11} width={44} stroke={ct.axis} tick={{ fill: ct.axis }} />
+                <Tooltip formatter={(value) => `${value}%`} contentStyle={tooltipStyle} labelStyle={{ color: ct.fg }} />
                 {result.series.map((s) => (
                   <Line key={s.name} type="monotone" dataKey={s.name} stroke={s.color} dot={false} strokeWidth={1.2} />
                 ))}
@@ -318,10 +333,10 @@ export function Backtest({
 
           {/* Yearly performance: return + intra-year max drawdown */}
           <div className="overflow-x-auto">
-            <p className="mb-1 text-sm font-medium text-gray-700">Yearly performance</p>
+            <p className="mb-1 text-sm font-medium text-fg">Yearly performance</p>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-xs uppercase text-gray-500">
+                <tr className="border-b border-line text-xs uppercase text-muted">
                   <th className="py-1.5 pr-3 text-left font-medium">Year</th>
                   {result.series.map((s) => (
                     <th key={s.name} colSpan={2} className="px-3 text-center font-semibold" style={{ color: s.color }}>
@@ -329,7 +344,7 @@ export function Backtest({
                     </th>
                   ))}
                 </tr>
-                <tr className="border-b text-[10px] uppercase text-gray-400">
+                <tr className="border-b border-line text-[10px] uppercase text-faint">
                   <th></th>
                   {result.series.map((s) => (
                     <FragmentCols key={s.name} />
@@ -338,17 +353,11 @@ export function Backtest({
               </thead>
               <tbody>
                 {years.map((yr) => (
-                  <tr key={yr} className="border-b last:border-0">
-                    <td className="py-1 pr-3 font-medium text-gray-700">{yr}</td>
+                  <tr key={yr} className="border-b border-line last:border-0">
+                    <td className="py-1 pr-3 font-medium text-fg">{yr}</td>
                     {result.series.map((s) => {
                       const y = s.metrics.yearly.find((v) => v.year === yr);
-                      return (
-                        <YearCells
-                          key={s.name}
-                          ret={y?.ret}
-                          maxDD={y?.maxDD}
-                        />
-                      );
+                      return <YearCells key={s.name} ret={y?.ret} maxDD={y?.maxDD} />;
                     })}
                   </tr>
                 ))}
@@ -358,7 +367,7 @@ export function Backtest({
         </div>
       )}
       {stale && !error && !running && (
-        <p className="text-sm text-gray-400">Pick a date range and hit <b>Run backtest</b>.</p>
+        <p className="text-sm text-faint">Pick a date range and hit <b>Run backtest</b>.</p>
       )}
     </div>
   );
@@ -376,10 +385,10 @@ function FragmentCols() {
 function YearCells({ ret, maxDD }: { ret?: number; maxDD?: number }) {
   return (
     <>
-      <td className={`px-3 text-right tabular-nums ${ret == null ? "text-gray-300" : ret >= 0 ? "text-green-700" : "text-red-600"}`}>
+      <td className={`px-3 text-right tabular-nums ${ret == null ? "text-faint" : ret >= 0 ? "text-up" : "text-down"}`}>
         {ret == null ? "—" : pct(ret, 1, true)}
       </td>
-      <td className="px-3 text-right tabular-nums text-gray-500">{maxDD == null ? "—" : pct(maxDD, 1)}</td>
+      <td className="px-3 text-right tabular-nums text-muted">{maxDD == null ? "—" : pct(maxDD, 1)}</td>
     </>
   );
 }

@@ -13,6 +13,11 @@ type View = "build" | "saved";
 
 const blank = (): Holding => ({ ticker: "", weightPct: 0 });
 
+const inputCls =
+  "rounded border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-blue-500 focus:outline-none";
+const cardCls = "rounded-xl border border-line bg-surface p-4 shadow-sm";
+const secBtn = "rounded border border-line px-3 py-1.5 text-sm hover:bg-subtle";
+
 export default function Home() {
   const [view, setView] = useState<View>("build");
   const [name, setName] = useState("My Portfolio");
@@ -28,7 +33,6 @@ export default function Home() {
     setSaved(loadSaved());
   }, []);
 
-  // ── derived ──────────────────────────────────────────────────────────
   const weights = useMemo(() => {
     const w: Record<string, number> = {};
     for (const h of holdings) {
@@ -44,7 +48,6 @@ export default function Home() {
   const overAlloc = totalPct > 100.5;
   const hasRows = Object.keys(weights).length > 0;
 
-  // ── holdings table ops ───────────────────────────────────────────────
   const update = (i: number, patch: Partial<Holding>) =>
     setHoldings((hs) => hs.map((h, j) => (j === i ? { ...h, ...patch } : h)));
   const addRow = () => setHoldings((hs) => [...hs, blank()]);
@@ -118,20 +121,17 @@ export default function Home() {
     setSaveErr([]);
   }
 
-  const inputCls =
-    "rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
-
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold">📈 Portfolio Backtester</h1>
-        <nav className="flex gap-1 rounded-lg bg-gray-100 p-1">
+        <h1 className="text-xl font-bold text-fg">📈 Portfolio Backtester</h1>
+        <nav className="flex gap-1 rounded-lg bg-subtle p-1">
           {(["build", "saved"] as View[]).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
               className={`rounded-md px-3 py-1 text-sm font-medium ${
-                view === v ? "bg-white text-gray-900 shadow" : "text-gray-600 hover:text-gray-900"
+                view === v ? "bg-surface text-fg shadow" : "text-muted hover:text-fg"
               }`}
             >
               {v === "build" ? "🛠️ Build & backtest" : `📂 Saved (${saved.length})`}
@@ -142,13 +142,13 @@ export default function Home() {
 
       {view === "build" ? (
         <div className="space-y-6">
-          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 font-semibold text-gray-800">1. Find a stock</h2>
+          <section className={cardCls}>
+            <h2 className="mb-3 font-semibold text-fg">1. Find a stock</h2>
             <TickerSearch onAdd={addTicker} />
           </section>
 
-          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 font-semibold text-gray-800">2. Your portfolio</h2>
+          <section className={cardCls}>
+            <h2 className="mb-3 font-semibold text-fg">2. Your portfolio</h2>
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-3">
                 <input
@@ -159,7 +159,7 @@ export default function Home() {
                 />
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs uppercase text-gray-500">
+                    <tr className="text-left text-xs uppercase text-muted">
                       <th className="pb-1">Ticker</th>
                       <th className="pb-1">Weight %</th>
                       <th></th>
@@ -191,7 +191,7 @@ export default function Home() {
                           />
                         </td>
                         <td>
-                          <button onClick={() => removeRow(i)} className="px-2 text-gray-400 hover:text-red-600" title="Remove">
+                          <button onClick={() => removeRow(i)} className="px-2 text-faint hover:text-down" title="Remove">
                             ✕
                           </button>
                         </td>
@@ -201,10 +201,10 @@ export default function Home() {
                 </table>
 
                 <div className="flex items-center justify-between text-sm">
-                  <button onClick={addRow} className="text-blue-600 hover:underline">
+                  <button onClick={addRow} className="text-blue-600 hover:underline dark:text-blue-400">
                     + Add row
                   </button>
-                  <span className={overAlloc ? "text-red-600" : "text-gray-600"}>
+                  <span className={overAlloc ? "text-down" : "text-muted"}>
                     Invested {Math.min(totalPct, 100).toFixed(1)}%
                     {!overAlloc && cashPct > 0.5 && ` · 💵 ${cashPct.toFixed(1)}% cash`}
                     {overAlloc && " — over 100%"}
@@ -212,14 +212,10 @@ export default function Home() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={normalize}
-                    disabled={totalPct <= 0}
-                    className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40"
-                  >
+                  <button onClick={normalize} disabled={totalPct <= 0} className={`${secBtn} disabled:opacity-40`}>
                     ⚖️ Normalize
                   </button>
-                  <button onClick={clear} className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
+                  <button onClick={clear} className={secBtn}>
                     🗑️ Clear
                   </button>
                   <button
@@ -230,35 +226,35 @@ export default function Home() {
                     {validating ? "Checking…" : "💾 Save"}
                   </button>
                 </div>
-                {saveMsg && <p className="text-sm text-green-700">{saveMsg}</p>}
+                {saveMsg && <p className="text-sm text-up">{saveMsg}</p>}
                 {saveErr.map((e) => (
-                  <p key={e} className="text-sm text-red-600">
+                  <p key={e} className="text-sm text-down">
                     ❌ {e}
                   </p>
                 ))}
               </div>
 
               <div className="space-y-3">
-                <p className="text-sm font-medium text-gray-700">Composition</p>
+                <p className="text-sm font-medium text-fg">Composition</p>
                 {hasRows && !overAlloc && totalPct > 0 ? (
                   <>
                     <Composition weights={weights} />
-                    <p className="text-sm font-medium text-gray-700">Sector breakdown</p>
+                    <p className="text-sm font-medium text-fg">Sector breakdown</p>
                     <SectorBreakdown weights={weights} />
                   </>
                 ) : (
-                  <p className="text-sm text-gray-400">Add holdings with weights to see the pie, bar, and sectors.</p>
+                  <p className="text-sm text-faint">Add holdings with weights to see the pie, bar, and sectors.</p>
                 )}
               </div>
             </div>
           </section>
 
-          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 font-semibold text-gray-800">3. Backtest over any time range</h2>
+          <section className={cardCls}>
+            <h2 className="mb-3 font-semibold text-fg">3. Backtest over any time range</h2>
             {hasRows && !overAlloc ? (
               <Backtest weights={weights} name={name} />
             ) : (
-              <p className="text-sm text-gray-400">Add holdings (weights up to 100%) to back-test them.</p>
+              <p className="text-sm text-faint">Add holdings (weights up to 100%) to back-test them.</p>
             )}
           </section>
         </div>
@@ -266,7 +262,7 @@ export default function Home() {
         <SavedView saved={saved} onLoad={loadInto} onDelete={(n) => setSaved(deletePortfolio(n))} />
       )}
 
-      <footer className="mt-8 text-xs text-gray-400">
+      <footer className="mt-8 text-xs text-faint">
         Prices via Yahoo Finance. Holdings that hadn&apos;t launched yet at the chosen start are held as cash until
         their first trading day. Idle-cash yield, taxes, and trading costs are not modeled. Not financial advice.
       </footer>
@@ -285,7 +281,7 @@ function SavedView({
 }) {
   if (saved.length === 0)
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-500 shadow-sm">
+      <div className="rounded-xl border border-line bg-surface p-8 text-center text-muted shadow-sm">
         No saved portfolios yet. Build one and hit 💾 Save.
       </div>
     );
@@ -295,11 +291,11 @@ function SavedView({
         const invested = Object.values(p.weights).reduce((a, b) => a + b, 0);
         const cash = Math.max(0, 1 - invested);
         return (
-          <div key={p.name} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div key={p.name} className="rounded-xl border border-line bg-surface p-4 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-semibold">{p.name}</p>
-                <p className="text-xs text-gray-500">
+                <p className="font-semibold text-fg">{p.name}</p>
+                <p className="text-xs text-muted">
                   {Object.keys(p.weights).length} holdings · rebalance {p.rebalance}
                 </p>
               </div>
@@ -307,7 +303,7 @@ function SavedView({
                 <button onClick={() => onLoad(p)} className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
                   ✏️ Load into builder
                 </button>
-                <button onClick={() => onDelete(p.name)} className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
+                <button onClick={() => onDelete(p.name)} className={secBtn}>
                   🗑️
                 </button>
               </div>
@@ -316,11 +312,11 @@ function SavedView({
               {Object.entries(p.weights)
                 .sort((a, b) => b[1] - a[1])
                 .map(([t, w]) => (
-                  <span key={t} className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs">
+                  <span key={t} className="rounded bg-subtle px-2 py-0.5 font-mono text-xs text-fg">
                     {t} {pct(w, 0)}
                   </span>
                 ))}
-              {cash > 0.005 && <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Cash {pct(cash, 0)}</span>}
+              {cash > 0.005 && <span className="rounded bg-subtle px-2 py-0.5 text-xs text-muted">Cash {pct(cash, 0)}</span>}
             </div>
           </div>
         );

@@ -5,6 +5,7 @@ import {
   Bar,
   BarChart,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -14,6 +15,7 @@ import {
 } from "recharts";
 import { fetchMeta } from "@/lib/api";
 import { AUTO_COLORS, CASH_COLOR } from "@/lib/format";
+import { chartTheme, usePrefersDark } from "@/lib/useTheme";
 
 interface Slice {
   name: string;
@@ -42,44 +44,37 @@ function PctTooltip({ active, payload }: { active?: boolean; payload?: { name?: 
   const p = payload[0];
   const name = p.payload?.name ?? p.name;
   return (
-    <div className="rounded border border-gray-200 bg-white px-2 py-1 text-xs shadow">
+    <div className="rounded border border-line bg-surface px-2 py-1 text-xs text-fg shadow">
       {name}: {Number(p.value).toFixed(1)}%
     </div>
   );
 }
 
 export function Composition({ weights }: { weights: Record<string, number> }) {
+  const ct = chartTheme(usePrefersDark());
   const slices = buildSlices(weights);
   if (slices.length === 0)
-    return <p className="text-sm text-gray-500">Add holdings with weights to see the composition.</p>;
+    return <p className="text-sm text-muted">Add holdings with weights to see the composition.</p>;
 
   return (
     <div className="space-y-3">
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={220}>
         <PieChart>
-          <Pie
-            data={slices}
-            dataKey="value"
-            nameKey="name"
-            innerRadius={45}
-            outerRadius={85}
-            paddingAngle={1}
-            label={(e: { name?: string; value?: number }) => `${e.name} ${Number(e.value).toFixed(0)}%`}
-            labelLine={false}
-          >
+          <Pie data={slices} dataKey="value" nameKey="name" innerRadius={45} outerRadius={85} paddingAngle={1}>
             {slices.map((s) => (
               <Cell key={s.name} fill={s.color} />
             ))}
           </Pie>
+          <Legend wrapperStyle={{ fontSize: 11, color: ct.fg }} />
           <Tooltip content={<PctTooltip />} />
         </PieChart>
       </ResponsiveContainer>
 
       <ResponsiveContainer width="100%" height={Math.max(80, 30 * slices.length)}>
         <BarChart data={slices} layout="vertical" margin={{ left: 8, right: 24 }}>
-          <XAxis type="number" tickFormatter={(v) => `${v}%`} domain={[0, "dataMax"]} fontSize={11} />
-          <YAxis type="category" dataKey="name" width={56} fontSize={11} />
-          <Tooltip content={<PctTooltip />} cursor={{ fill: "#f3f4f6" }} />
+          <XAxis type="number" tickFormatter={(v) => `${v}%`} domain={[0, "dataMax"]} fontSize={11} stroke={ct.axis} tick={{ fill: ct.axis }} />
+          <YAxis type="category" dataKey="name" width={56} fontSize={11} stroke={ct.axis} tick={{ fill: ct.axis }} />
+          <Tooltip content={<PctTooltip />} cursor={{ fill: ct.grid, fillOpacity: 0.4 }} />
           <Bar dataKey="value" radius={3}>
             {slices.map((s) => (
               <Cell key={s.name} fill={s.color} />
@@ -92,6 +87,7 @@ export function Composition({ weights }: { weights: Record<string, number> }) {
 }
 
 export function SectorBreakdown({ weights }: { weights: Record<string, number> }) {
+  const ct = chartTheme(usePrefersDark());
   const tickers = Object.keys(weights).filter((t) => weights[t] > 0);
   const [sectors, setSectors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -123,7 +119,7 @@ export function SectorBreakdown({ weights }: { weights: Record<string, number> }
 
   if (tickers.length === 0) return null;
   if (loading && Object.keys(sectors).length === 0)
-    return <p className="text-xs text-gray-400">Looking up sectors…</p>;
+    return <p className="text-xs text-faint">Looking up sectors…</p>;
 
   const agg: Record<string, number> = {};
   for (const t of tickers) {
@@ -145,9 +141,9 @@ export function SectorBreakdown({ weights }: { weights: Record<string, number> }
   return (
     <ResponsiveContainer width="100%" height={Math.max(90, 30 * data.length)}>
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }}>
-        <XAxis type="number" tickFormatter={(v) => `${v}%`} domain={[0, "dataMax"]} fontSize={11} />
-        <YAxis type="category" dataKey="name" width={96} fontSize={11} />
-        <Tooltip content={<PctTooltip />} cursor={{ fill: "#f3f4f6" }} />
+        <XAxis type="number" tickFormatter={(v) => `${v}%`} domain={[0, "dataMax"]} fontSize={11} stroke={ct.axis} tick={{ fill: ct.axis }} />
+        <YAxis type="category" dataKey="name" width={96} fontSize={11} stroke={ct.axis} tick={{ fill: ct.axis }} />
+        <Tooltip content={<PctTooltip />} cursor={{ fill: ct.grid, fillOpacity: 0.4 }} />
         <Bar dataKey="value" radius={3}>
           {data.map((d) => (
             <Cell key={d.name} fill={d.color} />

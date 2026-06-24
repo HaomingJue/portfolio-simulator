@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { fetchTicker } from "@/lib/api";
 import { humanMoney, num, pct } from "@/lib/format";
+import { chartTheme, usePrefersDark } from "@/lib/useTheme";
 import type { TickerOverview } from "@/lib/types";
 
 const PERIODS: Record<string, string> = {
@@ -23,6 +24,7 @@ const PERIODS: Record<string, string> = {
 };
 
 export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
+  const ct = chartTheme(usePrefersDark());
   const [symbol, setSymbol] = useState("");
   const [period, setPeriod] = useState("1Y");
   const [ov, setOv] = useState<TickerOverview | null>(null);
@@ -61,9 +63,9 @@ export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
           value={symbol}
           onChange={(e) => setSymbol(e.target.value)}
           placeholder="e.g. AAPL, SPY, BTC-USD"
-          className="w-48 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="w-48 rounded border border-line bg-surface px-3 py-1.5 text-sm text-fg focus:border-blue-500 focus:outline-none"
         />
-        <button type="submit" className="rounded bg-gray-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-900">
+        <button type="submit" className="rounded bg-gray-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-900 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white">
           Search
         </button>
         <div className="flex gap-1">
@@ -76,7 +78,7 @@ export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
                 if (ov) search(ov.symbol, p);
               }}
               className={`rounded px-2 py-1 text-xs ${
-                period === p ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                period === p ? "bg-blue-600 text-white" : "bg-subtle text-muted hover:text-fg"
               }`}
             >
               {p}
@@ -85,12 +87,12 @@ export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
         </div>
       </form>
 
-      {loading && <p className="text-sm text-gray-400">Looking up…</p>}
-      {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">❌ {error}</p>}
+      {loading && <p className="text-sm text-faint">Looking up…</p>}
+      {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">❌ {error}</p>}
 
       {ov && (
         <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
-          <div className="rounded-lg border border-gray-200 p-3">
+          <div className="rounded-lg border border-line p-3">
             <ResponsiveContainer width="100%" height={150}>
               <AreaChart data={chartData} margin={{ left: 0, right: 8, top: 4 }}>
                 <defs>
@@ -99,9 +101,13 @@ export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
                     <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" fontSize={10} minTickGap={50} />
-                <YAxis domain={["auto", "auto"]} tickFormatter={(v) => `$${num(v, 0)}`} fontSize={10} width={48} />
-                <Tooltip formatter={(value) => `$${num(Number(value))}`} />
+                <XAxis dataKey="date" fontSize={10} minTickGap={50} stroke={ct.axis} tick={{ fill: ct.axis }} />
+                <YAxis domain={["auto", "auto"]} tickFormatter={(v) => `$${num(v, 0)}`} fontSize={10} width={48} stroke={ct.axis} tick={{ fill: ct.axis }} />
+                <Tooltip
+                  formatter={(value) => `$${num(Number(value))}`}
+                  contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 6, color: ct.fg, fontSize: 12 }}
+                  labelStyle={{ color: ct.fg }}
+                />
                 <Area type="monotone" dataKey="close" stroke={lineColor} fill="url(#g)" strokeWidth={1.5} />
               </AreaChart>
             </ResponsiveContainer>
@@ -109,21 +115,21 @@ export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
 
           <div className="space-y-2">
             <div>
-              <p className="font-semibold">
-                {ov.name} <span className="font-mono text-xs text-gray-500">{ov.symbol}</span>
+              <p className="font-semibold text-fg">
+                {ov.name} <span className="font-mono text-xs text-faint">{ov.symbol}</span>
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 {ov.exchange} · {ov.sector}
               </p>
             </div>
             <div>
-              <span className="text-2xl font-semibold">${num(ov.price)}</span>{" "}
-              <span className={up ? "text-green-700" : "text-red-700"}>
+              <span className="text-2xl font-semibold text-fg">${num(ov.price)}</span>{" "}
+              <span className={up ? "text-up" : "text-down"}>
                 {ov.change >= 0 ? "+" : ""}
                 {num(ov.change)} ({pct(ov.changePct, 2, true)})
               </span>
             </div>
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-muted">
               Mkt cap {humanMoney(ov.marketCap)} · P/E {num(ov.pe)} ·{" "}
               Div {ov.dividendYield ? pct(ov.dividendYield > 1 ? ov.dividendYield / 100 : ov.dividendYield, 2) : "—"}
               <br />
