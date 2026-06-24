@@ -1,0 +1,154 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { fetchMeta } from "@/lib/api";
+import { AUTO_COLORS, CASH_COLOR } from "@/lib/format";
+
+interface Slice {
+  name: string;
+  value: number; // percent 0..100
+  color: string;
+}
+
+function buildSlices(weights: Record<string, number>): Slice[] {
+  const sum = Object.values(weights).reduce((a, b) => a + b, 0);
+  const cash = Math.max(0, 1 - sum);
+  const slices = Object.entries(weights)
+    .filter(([, w]) => w > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, w], i) => ({
+      name: t,
+      value: Number((w * 100).toFixed(2)),
+      color: AUTO_COLORS[i % AUTO_COLORS.length],
+    }));
+  if (cash > 0.0005)
+    slices.push({ name: "Cash", value: Number((cash * 100).toFixed(2)), color: CASH_COLOR });
+  return slices;
+}
+
+function PctTooltip({ active, payload }: { active?: boolean; payload?: { name?: string; value?: number; payload?: Slice }[] }) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0];
+  const name = p.payload?.name ?? p.name;
+  return (
+    <div className="rounded border border-gray-200 bg-white px-2 py-1 text-xs shadow">
+      {name}: {Number(p.value).toFixed(1)}%
+    </div>
+  );
+}
+
+export function Composition({ weights }: { weights: Record<string, number> }) {
+  const slices = buildSlices(weights);
+  if (slices.length === 0)
+    return <p className="text-sm text-gray-500">Add holdings with weights to see the composition.</p>;
+
+  return (
+    <div className="space-y-3">
+      <ResponsiveContainer width="100%" height={200}>
+        <PieChart>
+          <Pie
+            data={slices}
+            dataKey="value"
+            nameKey="name"
+            innerRadius={45}
+            outerRadius={85}
+            paddingAngle={1}
+            label={(e: { name?: string; value?: number }) => `${e.name} ${Number(e.value).toFixed(0)}%`}
+            labelLine={false}
+          >
+            {slices.map((s) => (
+              <Cell key={s.name} fill={s.color} />
+            ))}
+          </Pie>
+          <Tooltip content={<PctTooltip />} />
+        </PieChart>
+      </ResponsiveContainer>
+
+      <ResponsiveContainer width="100%" height={Math.max(80, 30 * slices.length)}>
+        <BarChart data={slices} layout="vertical" margin={{ left: 8, right: 24 }}>
+          <XAxis type="number" tickFormatter={(v) => `${v}%`} domain={[0, "dataMax"]} fontSize={11} />
+          <YAxis type="category" dataKey="name" width={56} fontSize={11} />
+          <Tooltip content={<PctTooltip />} cursor={{ fill: "#f3f4f6" }} />
+          <Bar dataKey="value" radius={3}>
+            {slices.map((s) => (
+              <Cell key={s.name} fill={s.color} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function SectorBreakdown({ weights }: { weights: Record<string, number> }) {
+  const tickers = Object.keys(weights).filter((t) => weights[t] > 0);
+  const [sectors, setSectors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const key = tickers.slice().sort().join(",");
+
+  useEffect(() => {
+    if (tickers.length === 0) return;
+    let cancelled = false;
+    setLoading(true);
+    fetchMeta(tickers)
+      .then(({ meta }) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const t of tickers) map[t] = meta[t]?.sector ?? "—";
+        setSectors(map);
+      })
+      .catch(() => {})
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  if (tickers.length === 0) return null;
+  if (loading && Object.keys(sectors).length === 0)
+    return <p className="text-xs text-gray-400">Looking up sectors…</p>;
+
+  const agg: Record<string, number> = {};
+  for (const t of tickers) {
+    const s = sectors[t] ?? "—";
+    agg[s] = (agg[s] ?? 0) + weights[t];
+  }
+  const sum = Object.values(weights).reduce((a, b) => a + b, 0);
+  const cash = Math.max(0, 1 - sum);
+  if (cash > 0.0005) agg["Cash"] = cash;
+
+  const data = Object.entries(agg)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, w], i) => ({
+      name,
+      value: Number((w * 100).toFixed(2)),
+      color: name === "Cash" ? CASH_COLOR : AUTO_COLORS[i % AUTO_COLORS.length],
+    }));
+
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(90, 30 * data.length)}>
+      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }}>
+        <XAxis type="number" tickFormatter={(v) => `${v}%`} domain={[0, "dataMax"]} fontSize={11} />
+        <YAxis type="category" dataKey="name" width={96} fontSize={11} />
+        <Tooltip content={<PctTooltip />} cursor={{ fill: "#f3f4f6" }} />
+        <Bar dataKey="value" radius={3}>
+          {data.map((d) => (
+            <Cell key={d.name} fill={d.color} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
