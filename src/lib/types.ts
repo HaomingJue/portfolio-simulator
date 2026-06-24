@@ -1,8 +1,25 @@
 /** Shared client/server types. */
+import type { Rebalance } from "./backtest";
 
 export interface Holding {
   ticker: string;
   weightPct: number; // 0..100; the leftover under 100 is held as cash
+}
+
+/** A built-in strategy from presets.json. */
+export interface Preset {
+  name: string;
+  description: string;
+  rebalance: Rebalance;
+  weights: Record<string, number>;
+}
+
+/** A portfolio pinned into the on-screen comparison set. */
+export interface ComparePortfolio {
+  id: string;
+  name: string;
+  weights: Record<string, number>; // fractions (may sum < 1 → rest is cash)
+  rebalance: Rebalance;
 }
 
 export interface SavedPortfolio {

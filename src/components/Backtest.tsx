@@ -14,15 +14,15 @@ import { fetchPrices } from "@/lib/api";
 import {
   betaCorrelation,
   computeMetrics,
-  REBALANCE_OPTIONS,
   simulateWithCash,
   type Metrics,
-  type Rebalance,
 } from "@/lib/backtest";
 import { AUTO_COLORS, money, pct } from "@/lib/format";
 import { chartTheme, usePrefersDark } from "@/lib/useTheme";
+import type { ComparePortfolio } from "@/lib/types";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const colorFor = (i: number) => AUTO_COLORS[i % AUTO_COLORS.length];
 
 interface Series {
   name: string;
@@ -69,18 +69,11 @@ const STAT_ROWS: { label: string; hint?: string; get: (s: Series) => string }[] 
   { label: "Final value", get: (s) => money(s.metrics.final) },
 ];
 
-export function Backtest({
-  weights,
-  name,
-}: {
-  weights: Record<string, number>;
-  name: string;
-}) {
+export function Backtest({ portfolios }: { portfolios: ComparePortfolio[] }) {
   const ct = chartTheme(usePrefersDark());
   const [start, setStart] = useState("2010-01-01");
   const [end, setEnd] = useState(todayISO());
   const [capital, setCapital] = useState(10000);
-  const [rebalance, setRebalance] = useState<Rebalance>("quarterly");
   const [bench, setBench] = useState(true);
   const [logScale, setLogScale] = useState(true);
 
@@ -89,42 +82,58 @@ export function Backtest({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sig = useMemo(
+  // Re-run needed when the portfolios or the sim inputs change (log scale is a
+  // display-only toggle, applied live — excluded from the signature).
+  const settingsSig = useMemo(
     () =>
-      Object.entries(weights)
-        .map(([t, w]) => `${t}:${w.toFixed(4)}`)
-        .sort()
-        .join(","),
-    [weights]
+      JSON.stringify({
+        p: portfolios.map((p) => ({ n: p.name, w: p.weights, r: p.rebalance })),
+        start,
+        end,
+        capital,
+        bench,
+      }),
+    [portfolios, start, end, capital, bench]
   );
-  // A result belongs to the holdings it was run for; if they change it's stale
-  // (re-run to refresh) — derived during render, no effect needed.
-  const stale = !result || resultSig !== sig;
-
-  const portfolioName = name.trim() || "My Portfolio";
+  const stale = !result || resultSig !== settingsSig;
 
   async function run() {
+    if (portfolios.length === 0) return;
     setRunning(true);
     setError(null);
     try {
-      const tickers = Object.keys(weights);
-      const all = bench ? Array.from(new Set([...tickers, "SPY"])) : tickers;
-      const data = await fetchPrices(all, start, end);
+      const tickers = new Set<string>();
+      for (const p of portfolios) for (const t of Object.keys(p.weights)) tickers.add(t);
+      if (bench) tickers.add("SPY");
+      const data = await fetchPrices([...tickers], start, end);
       if (data.dates.length === 0) throw new Error("No price data in this range.");
 
-      const portSim = simulateWithCash(data, weights, rebalance, capital);
-      const series: Series[] = [
-        {
-          name: portfolioName,
-          color: AUTO_COLORS[0],
-          metrics: computeMetrics(portSim, portfolioName, capital),
-          values: portSim.values,
-        },
-      ];
+      const used = new Map<string, number>(); // dedupe display names
+      const uniqueName = (n: string) => {
+        const base = n || "Portfolio";
+        const c = used.get(base) ?? 0;
+        used.set(base, c + 1);
+        return c === 0 ? base : `${base} (${c + 1})`;
+      };
+
+      const series: Series[] = [];
+      const deferredMap: Record<string, string | null> = {};
+      portfolios.forEach((p, i) => {
+        const sim = simulateWithCash(data, p.weights, p.rebalance, capital);
+        series.push({
+          name: uniqueName(p.name),
+          color: colorFor(i),
+          metrics: computeMetrics(sim, p.name, capital),
+          values: sim.values,
+        });
+        for (const [t, when] of Object.entries(sim.deferred)) {
+          if (!(t in deferredMap)) deferredMap[t] = when;
+        }
+      });
 
       let spyValues: number[] | null = null;
       if (bench) {
-        const spySim = simulateWithCash(data, { SPY: 1 }, rebalance, capital);
+        const spySim = simulateWithCash(data, { SPY: 1 }, "none", capital);
         spyValues = spySim.values;
         series.push({
           name: "S&P 500 (SPY)",
@@ -141,9 +150,9 @@ export function Backtest({
         }
       }
 
-      const deferred = Object.entries(portSim.deferred).map(([ticker, when]) => ({ ticker, when }));
+      const deferred = Object.entries(deferredMap).map(([ticker, when]) => ({ ticker, when }));
       setResult({ dates: data.dates, series, deferred });
-      setResultSig(sig);
+      setResultSig(settingsSig);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Backtest failed.");
       setResult(null);
@@ -187,9 +196,17 @@ export function Backtest({
     fontSize: 12,
   };
 
+  if (portfolios.length === 0) {
+    return (
+      <p className="text-sm text-faint">
+        Add your portfolio (or a preset / saved one) to the comparison above, then run a backtest.
+      </p>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-xs text-muted">
           Start
           <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className={inputCls} />
@@ -209,20 +226,10 @@ export function Backtest({
             className={inputCls}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          Rebalance
-          <select value={rebalance} onChange={(e) => setRebalance(e.target.value as Rebalance)} className={inputCls}>
-            {REBALANCE_OPTIONS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       <p className="-mt-2 text-xs text-faint">
-        Rebalance sells winners / tops up laggards back to your target weights on this schedule.{" "}
-        <b>none</b> = buy &amp; hold (weights drift with the market). Default is quarterly.
+        Each portfolio rebalances on its own schedule (set per portfolio above). The S&P 500
+        benchmark is buy &amp; hold.
       </p>
 
       <div className="flex flex-wrap items-center gap-4">
@@ -258,7 +265,6 @@ export function Backtest({
             </p>
           )}
 
-          {/* Performance & stability stats */}
           <div className="overflow-x-auto">
             <p className="mb-1 text-sm font-medium text-fg">Performance &amp; stability</p>
             <table className="w-full text-sm">
@@ -290,7 +296,6 @@ export function Backtest({
             </table>
           </div>
 
-          {/* Growth */}
           <div>
             <p className="mb-1 text-sm font-medium text-fg">Growth of {money(capital)}</p>
             <ResponsiveContainer width="100%" height={300}>
@@ -315,7 +320,6 @@ export function Backtest({
             </ResponsiveContainer>
           </div>
 
-          {/* Drawdown */}
           <div>
             <p className="mb-1 text-sm font-medium text-fg">Drawdown</p>
             <ResponsiveContainer width="100%" height={180}>
@@ -331,7 +335,6 @@ export function Backtest({
             </ResponsiveContainer>
           </div>
 
-          {/* Yearly performance: return + intra-year max drawdown */}
           <div className="overflow-x-auto">
             <p className="mb-1 text-sm font-medium text-fg">Yearly performance</p>
             <table className="w-full text-sm">
@@ -367,7 +370,7 @@ export function Backtest({
         </div>
       )}
       {stale && !error && !running && (
-        <p className="text-sm text-faint">Pick a date range and hit <b>Run backtest</b>.</p>
+        <p className="text-sm text-faint">Set a date range and hit <b>Run backtest</b>.</p>
       )}
     </div>
   );

@@ -1,0 +1,56 @@
+[
+  {
+    "name": "S&P 500",
+    "description": "100% US large-cap (SPY), buy & hold.",
+    "rebalance": "none",
+    "weights": { "SPY": 1.0 }
+  },
+  {
+    "name": "Total US Stock",
+    "description": "100% total US market (VTI), buy & hold.",
+    "rebalance": "none",
+    "weights": { "VTI": 1.0 }
+  },
+  {
+    "name": "60/40",
+    "description": "Classic 60% stocks / 40% bonds.",
+    "rebalance": "quarterly",
+    "weights": { "SPY": 0.6, "BND": 0.4 }
+  },
+  {
+    "name": "Three-Fund (Bogleheads)",
+    "description": "US + international stocks + total bond.",
+    "rebalance": "quarterly",
+    "weights": { "VTI": 0.5, "VXUS": 0.3, "BND": 0.2 }
+  },
+  {
+    "name": "Permanent Portfolio",
+    "description": "Harry Browne: stocks, long bonds, gold, cash in equal parts.",
+    "rebalance": "yearly",
+    "weights": { "SPY": 0.25, "TLT": 0.25, "GLD": 0.25, "BIL": 0.25 }
+  },
+  {
+    "name": "All Weather",
+    "description": "Ray Dalio: stocks, long & mid bonds, gold, commodities.",
+    "rebalance": "yearly",
+    "weights": { "VTI": 0.3, "TLT": 0.4, "IEI": 0.15, "GLD": 0.075, "DBC": 0.075 }
+  },
+  {
+    "name": "Golden Butterfly",
+    "description": "Stocks, small-cap value, long & short bonds, gold (equal parts).",
+    "rebalance": "yearly",
+    "weights": { "VTI": 0.2, "VBR": 0.2, "TLT": 0.2, "SHY": 0.2, "GLD": 0.2 }
+  },
+  {
+    "name": "Ivy Portfolio",
+    "description": "Meb Faber: stocks, intl, bonds, REITs, commodities.",
+    "rebalance": "yearly",
+    "weights": { "VTI": 0.2, "VXUS": 0.2, "BND": 0.2, "VNQ": 0.2, "DBC": 0.2 }
+  },
+  {
+    "name": "Larry Portfolio",
+    "description": "Small-cap value tilt + safe bonds (high return per unit risk).",
+    "rebalance": "yearly",
+    "weights": { "VBR": 0.3, "IEI": 0.7 }
+  }
+]
