@@ -40,6 +40,14 @@ export interface SimResult {
   deferred: Record<string, string | null>;
 }
 
+export interface YearStat {
+  year: number;
+  /** calendar-year total return */
+  ret: number;
+  /** worst intra-year peak-to-trough drawdown (negative fraction) */
+  maxDD: number;
+}
+
 export interface Metrics {
   name: string;
   start: string;
@@ -47,13 +55,25 @@ export interface Metrics {
   years: number;
   initial: number;
   final: number;
+  /** simple total return over the whole window */
+  totalReturn: number;
   cagr: number;
   vol: number;
   sharpe: number;
+  /** downside-only risk-adjusted return */
+  sortino: number;
+  /** annualized downside deviation */
+  downsideDev: number;
   calmar: number;
   maxDD: number;
   maxDDStart: string;
   maxDDEnd: string;
+  /** longest stretch below a prior peak, in calendar days */
+  longestUnderwaterDays: number;
+  /** depth+duration-of-drawdown stability measure (lower is steadier) */
+  ulcerIndex: number;
+  /** share of months with a positive return (0..1) */
+  positiveMonthsPct: number;
   worstYr: number;
   worstYrYr: number;
   bestYr: number;
@@ -61,6 +81,8 @@ export interface Metrics {
   greenYears: string;
   /** year → return */
   annual: Record<number, number>;
+  /** per-year return + intra-year max drawdown */
+  yearly: YearStat[];
   /** drawdown series aligned to `dates` (negative fractions) */
   drawdown: number[];
 }
@@ -197,7 +219,7 @@ export function simulateWithCash(
       for (let j = 0; j < tickers.length; j++) {
         if (avI[j] && prevAv[j]) holding[j] *= 1 + ret(i, j);
       }
-      let total = cash + holding.reduce((a, b) => a + b, 0);
+      const total = cash + holding.reduce((a, b) => a + b, 0);
       // fund tickers launching today from the reserved cash
       const newIdx = tickers
         .map((_, j) => j)
@@ -284,14 +306,56 @@ export function computeMetrics(
       ? rets.reduce((a, b) => a + (b - mean) ** 2, 0) / (rets.length - 1)
       : 0;
   const vol = Math.sqrt(variance) * Math.sqrt(252);
-  const sharpe = vol > 0 ? (cagr - 0.04) / vol : 0;
+  const RF = 0.04;
+  const sharpe = vol > 0 ? (cagr - RF) / vol : 0;
   const calmar = maxDD !== 0 ? cagr / Math.abs(maxDD) : Infinity;
 
-  // annual returns
+  // downside deviation (MAR = 0) → Sortino
+  let sumNeg2 = 0;
+  for (const r of rets) if (r < 0) sumNeg2 += r * r;
+  const downsideDev = Math.sqrt(sumNeg2 / (rets.length || 1)) * Math.sqrt(252);
+  const sortino = downsideDev > 0 ? (cagr - RF) / downsideDev : 0;
+
+  // Ulcer index — RMS of the drawdown series (penalizes deep & long drawdowns)
+  let sumDD2 = 0;
+  for (const d of drawdown) sumDD2 += (d * 100) ** 2;
+  const ulcerIndex = Math.sqrt(sumDD2 / (drawdown.length || 1));
+
+  // longest stretch below a prior peak, in calendar days
+  let lastPeakDate = dates[0];
+  let longestUnderwaterDays = 0;
+  for (let i = 0; i < drawdown.length; i++) {
+    if (drawdown[i] >= -1e-9) {
+      longestUnderwaterDays = Math.max(longestUnderwaterDays, daysBetween(lastPeakDate, dates[i]));
+      lastPeakDate = dates[i];
+    }
+  }
+  longestUnderwaterDays = Math.round(
+    Math.max(longestUnderwaterDays, daysBetween(lastPeakDate, end))
+  );
+
+  // % of months with a positive return
+  const monthEnds: number[] = [];
+  for (let i = 0; i < dates.length; i++) {
+    if (i === dates.length - 1 || dates[i].slice(0, 7) !== dates[i + 1].slice(0, 7))
+      monthEnds.push(i);
+  }
+  let posMonths = 0;
+  let prevM = initial;
+  for (const me of monthEnds) {
+    if (values[me] / prevM - 1 > 0) posMonths++;
+    prevM = values[me];
+  }
+  const positiveMonthsPct = monthEnds.length ? posMonths / monthEnds.length : 0;
+
+  const totalReturn = final / initial - 1;
+
+  // annual returns + intra-year max drawdown
   const years_set = Array.from(new Set(dates.map((d) => Number(d.slice(0, 4))))).sort(
     (a, b) => a - b
   );
   const annual: Record<number, number> = {};
+  const yearly: YearStat[] = [];
   for (const yr of years_set) {
     let firstIdx = -1;
     let lastIdx = -1;
@@ -302,7 +366,17 @@ export function computeMetrics(
       }
     }
     const startVal = firstIdx > 0 ? values[firstIdx - 1] : initial;
-    annual[yr] = values[lastIdx] / startVal - 1;
+    const ret = values[lastIdx] / startVal - 1;
+    annual[yr] = ret;
+    // worst peak-to-trough within the calendar year
+    let yPeak = values[firstIdx];
+    let yMaxDD = 0;
+    for (let i = firstIdx; i <= lastIdx; i++) {
+      if (values[i] > yPeak) yPeak = values[i];
+      const dd = yPeak > 0 ? (values[i] - yPeak) / yPeak : 0;
+      if (dd < yMaxDD) yMaxDD = dd;
+    }
+    yearly.push({ year: yr, ret, maxDD: yMaxDD });
   }
 
   const annualVals = Object.entries(annual).map(([y, r]) => ({ y: Number(y), r }));
@@ -325,19 +399,70 @@ export function computeMetrics(
     years: Math.round(years * 10) / 10,
     initial,
     final,
+    totalReturn,
     cagr,
     vol,
     sharpe,
+    sortino,
+    downsideDev,
     calmar,
     maxDD,
     maxDDStart: dates[maxDDStartIdx],
     maxDDEnd: dates[maxDDEndIdx],
+    longestUnderwaterDays,
+    ulcerIndex,
+    positiveMonthsPct,
     worstYr: worst.r,
     worstYrYr: worst.y,
     bestYr: best.r,
     bestYrYr: best.y,
     greenYears,
     annual,
+    yearly,
     drawdown,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Beta / correlation of one return stream vs a benchmark (e.g. SPY)
+// ---------------------------------------------------------------------------
+
+/** Daily simple returns from a value series. */
+function dailyReturns(values: number[]): number[] {
+  const r: number[] = [];
+  for (let i = 1; i < values.length; i++) {
+    r.push(values[i - 1] !== 0 ? values[i] / values[i - 1] - 1 : 0);
+  }
+  return r;
+}
+
+export function betaCorrelation(
+  portfolio: number[],
+  benchmark: number[]
+): { beta: number; correlation: number } {
+  const p = dailyReturns(portfolio);
+  const m = dailyReturns(benchmark);
+  const n = Math.min(p.length, m.length);
+  if (n < 2) return { beta: NaN, correlation: NaN };
+  let mp = 0;
+  let mm = 0;
+  for (let i = 0; i < n; i++) {
+    mp += p[i];
+    mm += m[i];
+  }
+  mp /= n;
+  mm /= n;
+  let cov = 0;
+  let vp = 0;
+  let vm = 0;
+  for (let i = 0; i < n; i++) {
+    const dp = p[i] - mp;
+    const dm = m[i] - mm;
+    cov += dp * dm;
+    vp += dp * dp;
+    vm += dm * dm;
+  }
+  const beta = vm > 0 ? cov / vm : NaN;
+  const correlation = vp > 0 && vm > 0 ? cov / Math.sqrt(vp * vm) : NaN;
+  return { beta, correlation };
 }

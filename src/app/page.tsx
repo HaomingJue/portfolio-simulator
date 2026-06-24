@@ -22,7 +22,11 @@ export default function Home() {
   const [saveErr, setSaveErr] = useState<string[]>([]);
   const [validating, setValidating] = useState(false);
 
-  useEffect(() => setSaved(loadSaved()), []);
+  useEffect(() => {
+    // localStorage is client-only — hydrate the saved list after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSaved(loadSaved());
+  }, []);
 
   // ── derived ──────────────────────────────────────────────────────────
   const weights = useMemo(() => {

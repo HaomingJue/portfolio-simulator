@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { fetchPrices } from "@/lib/api";
 import {
+  betaCorrelation,
   computeMetrics,
   REBALANCE_OPTIONS,
   simulateWithCash,
@@ -27,6 +28,8 @@ interface Series {
   color: string;
   metrics: Metrics;
   values: number[];
+  beta?: number;
+  corr?: number;
 }
 interface Result {
   dates: string[];
@@ -44,6 +47,27 @@ function downsample<T>(arr: T[], max = 500): { v: T; i: number }[] {
   return out;
 }
 
+const fmtCalmar = (c: number) => (Number.isFinite(c) ? c.toFixed(2) : "∞");
+const fmtNum = (x: number | undefined) => (x != null && Number.isFinite(x) ? x.toFixed(2) : "—");
+
+const STAT_ROWS: { label: string; hint?: string; get: (s: Series) => string }[] = [
+  { label: "Total return", get: (s) => pct(s.metrics.totalReturn, 1, true) },
+  { label: "CAGR", hint: "annualized return", get: (s) => pct(s.metrics.cagr, 2, true) },
+  { label: "Volatility (ann)", get: (s) => pct(s.metrics.vol, 1) },
+  { label: "Sharpe", hint: "return per unit of total risk", get: (s) => fmtNum(s.metrics.sharpe) },
+  { label: "Sortino", hint: "return per unit of downside risk", get: (s) => fmtNum(s.metrics.sortino) },
+  { label: "Calmar", hint: "CAGR ÷ max drawdown", get: (s) => fmtCalmar(s.metrics.calmar) },
+  { label: "Max drawdown", get: (s) => pct(s.metrics.maxDD, 1) },
+  { label: "Longest underwater", hint: "longest time below a prior peak", get: (s) => `${s.metrics.longestUnderwaterDays}d` },
+  { label: "Ulcer index", hint: "depth & duration of drawdowns (lower = steadier)", get: (s) => s.metrics.ulcerIndex.toFixed(1) },
+  { label: "% positive months", get: (s) => pct(s.metrics.positiveMonthsPct, 0) },
+  { label: "Beta vs SPY", hint: "sensitivity to the market", get: (s) => fmtNum(s.beta) },
+  { label: "Correlation vs SPY", get: (s) => fmtNum(s.corr) },
+  { label: "Best year", get: (s) => `${pct(s.metrics.bestYr, 0, true)} (${s.metrics.bestYrYr})` },
+  { label: "Worst year", get: (s) => `${pct(s.metrics.worstYr, 0, true)} (${s.metrics.worstYrYr})` },
+  { label: "Final value", get: (s) => money(s.metrics.final) },
+];
+
 export function Backtest({
   weights,
   name,
@@ -59,6 +83,7 @@ export function Backtest({
   const [logScale, setLogScale] = useState(true);
 
   const [result, setResult] = useState<Result | null>(null);
+  const [resultSig, setResultSig] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,33 +95,35 @@ export function Backtest({
         .join(","),
     [weights]
   );
-  // Reset stale results when the portfolio changes (re-run to refresh).
-  useEffect(() => {
-    setResult(null);
-  }, [sig]);
+  // A result belongs to the holdings it was run for; if they change it's stale
+  // (re-run to refresh) — derived during render, no effect needed.
+  const stale = !result || resultSig !== sig;
 
   const portfolioName = name.trim() || "My Portfolio";
-  const holdsSPY = "SPY" in weights;
 
   async function run() {
     setRunning(true);
     setError(null);
     try {
       const tickers = Object.keys(weights);
-      const all = bench && !holdsSPY ? [...tickers, "SPY"] : tickers;
+      const all = bench ? Array.from(new Set([...tickers, "SPY"])) : tickers;
       const data = await fetchPrices(all, start, end);
       if (data.dates.length === 0) throw new Error("No price data in this range.");
 
-      const series: Series[] = [];
       const portSim = simulateWithCash(data, weights, rebalance, capital);
-      series.push({
-        name: portfolioName,
-        color: AUTO_COLORS[0],
-        metrics: computeMetrics(portSim, portfolioName, capital),
-        values: portSim.values,
-      });
-      if (bench && !holdsSPY) {
+      const series: Series[] = [
+        {
+          name: portfolioName,
+          color: AUTO_COLORS[0],
+          metrics: computeMetrics(portSim, portfolioName, capital),
+          values: portSim.values,
+        },
+      ];
+
+      let spyValues: number[] | null = null;
+      if (bench) {
         const spySim = simulateWithCash(data, { SPY: 1 }, rebalance, capital);
+        spyValues = spySim.values;
         series.push({
           name: "S&P 500 (SPY)",
           color: "#757575",
@@ -104,11 +131,17 @@ export function Backtest({
           values: spySim.values,
         });
       }
-      const deferred = Object.entries(portSim.deferred).map(([ticker, when]) => ({
-        ticker,
-        when,
-      }));
+      if (spyValues) {
+        for (const s of series) {
+          const { beta, correlation } = betaCorrelation(s.values, spyValues);
+          s.beta = beta;
+          s.corr = correlation;
+        }
+      }
+
+      const deferred = Object.entries(portSim.deferred).map(([ticker, when]) => ({ ticker, when }));
       setResult({ dates: data.dates, series, deferred });
+      setResultSig(sig);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Backtest failed.");
       setResult(null);
@@ -133,6 +166,13 @@ export function Backtest({
       for (const s of result.series) row[s.name] = Number((s.metrics.drawdown[i] * 100).toFixed(2));
       return row;
     });
+  }, [result]);
+
+  const years = useMemo(() => {
+    if (!result) return [];
+    const set = new Set<number>();
+    for (const s of result.series) for (const y of s.metrics.yearly) set.add(y.year);
+    return Array.from(set).sort((a, b) => a - b);
   }, [result]);
 
   const inputCls =
@@ -190,13 +230,10 @@ export function Backtest({
         </button>
       </div>
 
-      {bench && holdsSPY && (
-        <p className="text-xs text-gray-500">Your portfolio already holds SPY — no separate benchmark line to add.</p>
-      )}
       {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      {result && (
-        <div className="space-y-4">
+      {!stale && result && (
+        <div className="space-y-5">
           {result.deferred.length > 0 && (
             <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">
               ⚠️ With a start of <b>{start}</b>, some holdings weren&apos;t trading yet and are held as{" "}
@@ -208,45 +245,39 @@ export function Backtest({
             </p>
           )}
 
+          {/* Performance & stability stats */}
           <div className="overflow-x-auto">
+            <p className="mb-1 text-sm font-medium text-gray-700">Performance &amp; stability</p>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-gray-500">
-                  <th className="py-1.5 pr-3">Portfolio</th>
-                  <th className="px-3">CAGR</th>
-                  <th className="px-3">Vol</th>
-                  <th className="px-3">Sharpe</th>
-                  <th className="px-3">Max DD</th>
-                  <th className="px-3">Best yr</th>
-                  <th className="px-3">Worst yr</th>
-                  <th className="px-3">Final</th>
-                  <th className="px-3">Green</th>
+                  <th className="py-1.5 pr-3 font-medium">Metric</th>
+                  {result.series.map((s) => (
+                    <th key={s.name} className="px-3 font-semibold" style={{ color: s.color }}>
+                      {s.name}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {result.series.map((s) => (
-                  <tr key={s.name} className="border-b">
-                    <td className="py-1.5 pr-3 font-medium" style={{ color: s.color }}>
-                      {s.name}
+                {STAT_ROWS.map((row) => (
+                  <tr key={row.label} className="border-b last:border-0">
+                    <td className="py-1 pr-3 text-gray-600" title={row.hint}>
+                      {row.label}
+                      {row.hint && <span className="ml-1 text-gray-300">ⓘ</span>}
                     </td>
-                    <td className="px-3">{pct(s.metrics.cagr, 2, true)}</td>
-                    <td className="px-3">{pct(s.metrics.vol, 1)}</td>
-                    <td className="px-3">{s.metrics.sharpe.toFixed(2)}</td>
-                    <td className="px-3">{pct(s.metrics.maxDD, 1)}</td>
-                    <td className="px-3">
-                      {pct(s.metrics.bestYr, 0, true)} ({s.metrics.bestYrYr})
-                    </td>
-                    <td className="px-3">
-                      {pct(s.metrics.worstYr, 0, true)} ({s.metrics.worstYrYr})
-                    </td>
-                    <td className="px-3">{money(s.metrics.final)}</td>
-                    <td className="px-3">{s.metrics.greenYears}</td>
+                    {result.series.map((s) => (
+                      <td key={s.name} className="px-3 tabular-nums">
+                        {row.get(s)}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
+          {/* Growth */}
           <div>
             <p className="mb-1 text-sm font-medium text-gray-700">Growth of {money(capital)}</p>
             <ResponsiveContainer width="100%" height={300}>
@@ -269,6 +300,7 @@ export function Backtest({
             </ResponsiveContainer>
           </div>
 
+          {/* Drawdown */}
           <div>
             <p className="mb-1 text-sm font-medium text-gray-700">Drawdown</p>
             <ResponsiveContainer width="100%" height={180}>
@@ -283,11 +315,71 @@ export function Backtest({
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Yearly performance: return + intra-year max drawdown */}
+          <div className="overflow-x-auto">
+            <p className="mb-1 text-sm font-medium text-gray-700">Yearly performance</p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs uppercase text-gray-500">
+                  <th className="py-1.5 pr-3 text-left font-medium">Year</th>
+                  {result.series.map((s) => (
+                    <th key={s.name} colSpan={2} className="px-3 text-center font-semibold" style={{ color: s.color }}>
+                      {s.name}
+                    </th>
+                  ))}
+                </tr>
+                <tr className="border-b text-[10px] uppercase text-gray-400">
+                  <th></th>
+                  {result.series.map((s) => (
+                    <FragmentCols key={s.name} />
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {years.map((yr) => (
+                  <tr key={yr} className="border-b last:border-0">
+                    <td className="py-1 pr-3 font-medium text-gray-700">{yr}</td>
+                    {result.series.map((s) => {
+                      const y = s.metrics.yearly.find((v) => v.year === yr);
+                      return (
+                        <YearCells
+                          key={s.name}
+                          ret={y?.ret}
+                          maxDD={y?.maxDD}
+                        />
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
-      {!result && !error && (
+      {stale && !error && !running && (
         <p className="text-sm text-gray-400">Pick a date range and hit <b>Run backtest</b>.</p>
       )}
     </div>
+  );
+}
+
+function FragmentCols() {
+  return (
+    <>
+      <th className="px-3 text-right font-medium">Return</th>
+      <th className="px-3 text-right font-medium">Max DD</th>
+    </>
+  );
+}
+
+function YearCells({ ret, maxDD }: { ret?: number; maxDD?: number }) {
+  return (
+    <>
+      <td className={`px-3 text-right tabular-nums ${ret == null ? "text-gray-300" : ret >= 0 ? "text-green-700" : "text-red-600"}`}>
+        {ret == null ? "—" : pct(ret, 1, true)}
+      </td>
+      <td className="px-3 text-right tabular-nums text-gray-500">{maxDD == null ? "—" : pct(maxDD, 1)}</td>
+    </>
   );
 }

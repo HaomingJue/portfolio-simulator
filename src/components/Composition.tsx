@@ -100,16 +100,21 @@ export function SectorBreakdown({ weights }: { weights: Record<string, number> }
   useEffect(() => {
     if (tickers.length === 0) return;
     let cancelled = false;
-    setLoading(true);
-    fetchMeta(tickers)
-      .then(({ meta }) => {
+    async function loadSectors(syms: string[]) {
+      setLoading(true);
+      try {
+        const { meta } = await fetchMeta(syms);
         if (cancelled) return;
         const map: Record<string, string> = {};
-        for (const t of tickers) map[t] = meta[t]?.sector ?? "—";
+        for (const t of syms) map[t] = meta[t]?.sector ?? "—";
         setSectors(map);
-      })
-      .catch(() => {})
-      .finally(() => !cancelled && setLoading(false));
+      } catch {
+        // leave previous sectors in place
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadSectors(key.split(","));
     return () => {
       cancelled = true;
     };

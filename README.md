@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Portfolio Backtester (web)
 
-## Getting Started
+Build, visualize, and backtest multi-asset portfolios with live Yahoo Finance
+data. A TypeScript / Next.js port of the Python + Streamlit app.
 
-First, run the development server:
+- **Search & add** any ticker (stocks, ETFs, `BTC-USD`, …) with a Yahoo-style overview.
+- **Editable holdings** — any weights; whatever is under 100% is held as **cash**.
+- **Composition** pie + bar and a **sector breakdown**.
+- **Backtest** over any date range vs an optional **S&P 500 (SPY)** benchmark, with
+  growth + drawdown charts, a yearly table (return **and** intra-year max drawdown),
+  and performance/stability stats: total return, CAGR, vol, Sharpe, Sortino, Calmar,
+  max drawdown, longest-underwater, ulcer index, % positive months, beta/correlation
+  vs SPY, best/worst year.
+- **Holdings that hadn't launched yet** at the chosen start are held as **cash**
+  until their first trading day (the app tells you which, and from when).
+- **Saved portfolios** persist in the browser (`localStorage`).
+
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+No API keys needed — Yahoo data is fetched server-side via Route Handlers
+(`/api/prices`, `/api/ticker`, `/api/meta`), which avoids browser CORS.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/lib/backtest.ts` — pure, dependency-free engine (`simulateWithCash`,
+  `computeMetrics`, `betaCorrelation`). Validated bit-exact against the Python engine.
+- `src/app/api/*` — server Route Handlers using `yahoo-finance2`.
+- `src/components/*` — client UI (search, composition, backtest) with Recharts.
 
-## Learn More
+## Deploy
 
-To learn more about Next.js, take a look at the following resources:
+### Option A — Vercel Git integration (simplest)
+Import the repo at [vercel.com](https://vercel.com) → **Add New → Project**. Vercel
+auto-detects Next.js; no build settings or env vars are needed. Every push then
+deploys automatically (production on `main`, previews on PRs).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Option B — the included GitHub Actions pipeline
+`.github/workflows/deploy.yml` runs typecheck + lint + build on every push/PR and,
+on `main`, deploys to Vercel. It **skips the deploy with a warning** until you add
+these repository **secrets** (Settings → Secrets and variables → Actions):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Secret | Where to get it |
+|---|---|
+| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens → Create |
+| `VERCEL_ORG_ID` | run `vercel link` locally, then read `.vercel/project.json` |
+| `VERCEL_PROJECT_ID` | same `.vercel/project.json` |
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> Use **either** Option A **or** B — running both will double-deploy. If you use the
+> Actions pipeline, disable Vercel's automatic Git deploys for the project.
