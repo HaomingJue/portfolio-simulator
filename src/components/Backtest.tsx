@@ -18,7 +18,7 @@ import {
   type Metrics,
 } from "@/lib/backtest";
 import { AUTO_COLORS, money, pct } from "@/lib/format";
-import { chartTheme, usePrefersDark } from "@/lib/useTheme";
+import { chartTheme, useEffectiveDark } from "@/lib/useTheme";
 import type { ComparePortfolio } from "@/lib/types";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -70,7 +70,7 @@ const STAT_ROWS: { label: string; hint?: string; get: (s: Series) => string }[] 
 ];
 
 export function Backtest({ portfolios }: { portfolios: ComparePortfolio[] }) {
-  const ct = chartTheme(usePrefersDark());
+  const ct = chartTheme(useEffectiveDark());
   const [start, setStart] = useState("2010-01-01");
   const [end, setEnd] = useState(todayISO());
   const [capital, setCapital] = useState(10000);
@@ -250,12 +250,12 @@ export function Backtest({ portfolios }: { portfolios: ComparePortfolio[] }) {
         </button>
       </div>
 
-      {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
+      {error && <p className="rounded bg-danger-bg px-3 py-2 text-sm text-danger-fg">{error}</p>}
 
       {!stale && result && (
         <div className="space-y-5">
           {result.deferred.length > 0 && (
-            <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+            <p className="rounded bg-warn-bg px-3 py-2 text-sm text-warn-fg">
               ⚠️ With a start of <b>{start}</b>, some holdings weren&apos;t trading yet and are held as{" "}
               <b>cash</b> until they launch:{" "}
               {result.deferred

@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import { fetchMeta } from "@/lib/api";
 import { AUTO_COLORS, CASH_COLOR } from "@/lib/format";
-import { chartTheme, usePrefersDark } from "@/lib/useTheme";
+import { chartTheme, useEffectiveDark } from "@/lib/useTheme";
 
 interface Slice {
   name: string;
@@ -51,7 +51,7 @@ function PctTooltip({ active, payload }: { active?: boolean; payload?: { name?: 
 }
 
 export function Composition({ weights }: { weights: Record<string, number> }) {
-  const ct = chartTheme(usePrefersDark());
+  const ct = chartTheme(useEffectiveDark());
   const slices = buildSlices(weights);
   if (slices.length === 0)
     return <p className="text-sm text-muted">Add holdings with weights to see the composition.</p>;
@@ -87,7 +87,7 @@ export function Composition({ weights }: { weights: Record<string, number> }) {
 }
 
 export function SectorBreakdown({ weights }: { weights: Record<string, number> }) {
-  const ct = chartTheme(usePrefersDark());
+  const ct = chartTheme(useEffectiveDark());
   const tickers = Object.keys(weights).filter((t) => weights[t] > 0);
   const [sectors, setSectors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);

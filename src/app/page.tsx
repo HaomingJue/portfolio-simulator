@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Backtest } from "@/components/Backtest";
 import { Composition, SectorBreakdown } from "@/components/Composition";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { TickerSearch } from "@/components/TickerSearch";
 import { fetchMeta } from "@/lib/api";
 import { REBALANCE_OPTIONS, type Rebalance } from "@/lib/backtest";
@@ -153,9 +154,12 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <header className="mb-6">
-        <h1 className="text-xl font-bold text-fg">📈 Portfolio Backtester</h1>
-        <p className="text-sm text-muted">Build portfolios, pin several, and compare them side by side.</p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-fg">📈 Portfolio Backtester</h1>
+          <p className="text-sm text-muted">Build portfolios, pin several, and compare them side by side.</p>
+        </div>
+        <ThemeToggle />
       </header>
 
       {/* 1. Build */}
@@ -212,7 +216,7 @@ export default function Home() {
             </table>
 
             <div className="flex items-center justify-between text-sm">
-              <button onClick={addRow} className="text-blue-600 hover:underline dark:text-blue-400">
+              <button onClick={addRow} className="text-accent hover:underline">
                 + Add row
               </button>
               <span className={overAlloc ? "text-down" : "text-muted"}>
@@ -301,7 +305,7 @@ export default function Home() {
                 {saved.map((s) => (
                   <span key={s.name} className="inline-flex items-center gap-1 rounded bg-subtle px-2 py-1 text-xs text-fg">
                     {s.name}
-                    <button onClick={() => addSavedToComparison(s)} title="Add to comparison" className="font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400">
+                    <button onClick={() => addSavedToComparison(s)} title="Add to comparison" className="font-bold text-accent hover:underline">
                       +
                     </button>
                     <button onClick={() => loadSavedIntoBuilder(s)} title="Load into builder" className="text-muted hover:text-fg">

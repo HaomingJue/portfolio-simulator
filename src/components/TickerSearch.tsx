@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { fetchTicker } from "@/lib/api";
 import { humanMoney, num, pct } from "@/lib/format";
-import { chartTheme, usePrefersDark } from "@/lib/useTheme";
+import { chartTheme, useEffectiveDark } from "@/lib/useTheme";
 import type { TickerOverview } from "@/lib/types";
 
 const PERIODS: Record<string, string> = {
@@ -24,7 +24,7 @@ const PERIODS: Record<string, string> = {
 };
 
 export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
-  const ct = chartTheme(usePrefersDark());
+  const ct = chartTheme(useEffectiveDark());
   const [symbol, setSymbol] = useState("");
   const [period, setPeriod] = useState("1Y");
   const [ov, setOv] = useState<TickerOverview | null>(null);
@@ -65,7 +65,7 @@ export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
           placeholder="e.g. AAPL, SPY, BTC-USD"
           className="w-48 rounded border border-line bg-surface px-3 py-1.5 text-sm text-fg focus:border-blue-500 focus:outline-none"
         />
-        <button type="submit" className="rounded bg-gray-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-900 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white">
+        <button type="submit" className="rounded bg-fg px-3 py-1.5 text-sm font-medium text-page hover:opacity-90">
           Search
         </button>
         <div className="flex gap-1">
@@ -88,7 +88,7 @@ export function TickerSearch({ onAdd }: { onAdd: (symbol: string) => void }) {
       </form>
 
       {loading && <p className="text-sm text-faint">Looking up…</p>}
-      {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">❌ {error}</p>}
+      {error && <p className="rounded bg-danger-bg px-3 py-2 text-sm text-danger-fg">❌ {error}</p>}
 
       {ov && (
         <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
